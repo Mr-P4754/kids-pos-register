@@ -1,16 +1,16 @@
 {
-  "name": "イベント・店舗用 簡易POSレジシステム",
-  "short_name": "簡易POSレジ",
-  "description": "縁日・学園祭・バザー・催事・店舗で即戦力となるブラウザ完結型POSレジシステム",
+  "name": "こども バーコードPOSレジ おみせやさん",
+  "short_name": "おみせやさんレジ",
+  "description": "バーコードをピッ！とお買い物＆知育お金計算ができる、こども向け本格お店屋さんごっこPOSレジシステム",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#0f172a",
-  "theme_color": "#0f172a",
+  "background_color": "#fef3c7",
+  "theme_color": "#f59e0b",
   "lang": "ja",
   "dir": "ltr",
-  "categories": ["business", "finance", "utilities"],
+  "categories": ["education", "games", "kids"],
   "icons": [
     {
       "src": "icons/icon-192.png",

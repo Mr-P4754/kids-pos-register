@@ -1,16 +1,17 @@
 /**
- * イベント・店舗用 簡易POSレジシステム - Service Worker
+ * こども バーコードPOSレジ おみせやさん - Service Worker
  * 完全オフライン動作対応 PWA サービスワーカー
  */
 
-const CACHE_NAME = 'practical-pos-cache-v1';
+const CACHE_NAME = 'kids-pos-cache-v1';
 
 // オフライン起動時に必要なプリキャッシュアセット一覧
 const PRECACHE_ASSETS = [
   './',
   './index.html',
-  './style.css',
-  './app.js',
+  './pos.html',
+  './css/style.css',
+  './js/app.js',
   './manifest.json',
   './icons/icon.svg',
   './icons/icon-192.png',
@@ -19,17 +20,17 @@ const PRECACHE_ASSETS = [
   './icons/apple-touch-icon.png',
   // 外部CDNライブラリ（オフラインでも完全に機能するようキャッシュ）
   'https://cdn.tailwindcss.com',
+  'https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;800;900&display=swap',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css',
   'https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js',
   'https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js',
-  'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js'
+  'https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js'
 ];
 
 // インストール処理：コアリソースの事前キャッシュ
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      // 外部CDNなどで万が一失敗しても全体を止めないよう1件ずつ確実にキャッシュ
       return Promise.allSettled(
         PRECACHE_ASSETS.map((url) =>
           cache.add(new Request(url, { mode: 'cors' })).catch((err) => {
@@ -44,78 +45,57 @@ self.addEventListener('install', (event) => {
 // アクティベート処理：古いキャッシュの削除とクライアント即時制御
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
+    caches.keys().then((keys) => {
       return Promise.all(
-        cacheNames
-          .filter((name) => name !== CACHE_NAME)
-          .map((name) => caches.delete(name))
+        keys.map((key) => {
+          if (key !== CACHE_NAME) {
+            console.log(`[SW] Removing outdated cache: ${key}`);
+            return caches.delete(key);
+          }
+        })
       );
     }).then(() => self.clients.claim())
   );
 });
 
-// フェッチ処理：ネットワーク優先（オフライン時はキャッシュへ即座にフォールバック）
+// フェッチ処理：Network First（キャッシュフォールバック）で最新コードを優先しつつオフライン完全稼働
 self.addEventListener('fetch', (event) => {
-  const request = event.request;
+  // GETリクエスト以外はスキップ
+  if (event.request.method !== 'GET') return;
 
-  // GETリクエスト以外はそのまま
-  if (request.method !== 'GET') return;
+  const url = new URL(event.request.url);
 
-  // CDNライブラリ・画像などはキャッシュ優先（Cache First）
-  const url = new URL(request.url);
-  const isCdnOrStatic =
-    url.hostname.includes('cdnjs.cloudflare.com') ||
-    url.hostname.includes('cdn.jsdelivr.net') ||
-    url.hostname.includes('cdn.tailwindcss.com') ||
-    request.destination === 'image' ||
-    request.destination === 'font';
+  // Chrome拡張機能などのリクエストはスキップ
+  if (!url.protocol.startsWith('http')) return;
 
-  if (isCdnOrStatic) {
-    event.respondWith(
-      caches.match(request).then((cachedResponse) => {
-        if (cachedResponse) {
-          return cachedResponse;
-        }
-        return fetch(request).then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            const responseToCache = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(request, responseToCache);
-            });
-          }
-          return networkResponse;
-        }).catch(() => {
-          // オフライン時の静的ファイルマッチ
-          return caches.match(request);
-        });
-      })
-    );
-    return;
-  }
-
-  // HTML / JS / CSS 等のコアコードはネットワークファースト（最新を優先取得、不通時はキャッシュ）
   event.respondWith(
-    fetch(request)
+    fetch(event.request)
       .then((networkResponse) => {
+        // 成功したレスポンスをキャッシュに保存・更新
         if (networkResponse && networkResponse.status === 200) {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
-            cache.put(request, responseToCache);
+            cache.put(event.request, responseToCache);
           });
         }
         return networkResponse;
       })
-      .catch(() => {
-        // オフライン時：キャッシュから返却
-        return caches.match(request).then((cachedResponse) => {
-          if (cachedResponse) {
-            return cachedResponse;
-          }
-          // ナビゲーションリクエスト（ページ移動）なら index.html を返す
-          if (request.mode === 'navigate') {
-            return caches.match('./index.html') || caches.match('./');
-          }
-          return new Response('Offline', { status: 503, statusText: 'Offline' });
+      .catch(async () => {
+        // オフライン時はキャッシュから返却
+        const cachedResponse = await caches.match(event.request);
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+
+        // HTMLページリクエストでキャッシュがない場合は index.html を返す
+        if (event.request.mode === 'navigate') {
+          return caches.match('./index.html');
+        }
+
+        return new Response('Offline: Resource not available in cache.', {
+          status: 503,
+          statusText: 'Service Unavailable',
+          headers: new Headers({ 'Content-Type': 'text/plain; charset=utf-8' })
         });
       })
   );
