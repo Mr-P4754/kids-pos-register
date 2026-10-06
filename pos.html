@@ -1,0 +1,1178 @@
+<!DOCTYPE html>
+<html lang="ja" class="h-full overflow-hidden" style="height: 100%; height: 100dvh; overflow: hidden;">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <title>イベント・店舗用 簡易POSレジシステム</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <!-- html5-qrcode: バーコード / QRコード読み取り -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+  <!-- JsBarcode: バーコードSVG/Canvas生成 -->
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+  <!-- qrcodejs: QRコード生成 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <!-- カスタムスタイル -->
+  <link rel="stylesheet" href="style.css?v=13">
+  <style>
+    html, body {
+      height: 100% !important;
+      height: 100dvh !important;
+      max-height: 100dvh !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: hidden !important;
+    }
+    /* 他タブ切替時の全画面表示を強制担保（画面セクションのみに限定） */
+    [id^="screen-"].hidden, section[id^="screen-"].hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+
+<body class="bg-slate-100 text-slate-800 h-full h-screen h-[100dvh] max-h-screen max-h-[100dvh] overflow-hidden flex flex-col m-0 p-0">
+  <!-- ヘッダー（すっきりとした実用ダークスレート） -->
+  <header class="bg-slate-900 border-b border-slate-800 shadow-md shrink-0 px-3 sm:px-6 py-2 z-30">
+    <div class="max-w-7xl mx-auto flex items-center justify-between gap-2">
+      <!-- ロゴ & 店舗タイトル & レジ端末名 -->
+      <div class="flex items-center gap-2.5 cursor-pointer min-w-0" onclick="switchTab('register')">
+        <span class="text-2xl sm:text-3xl text-emerald-400 shrink-0"><i class="fa-solid fa-cash-register"></i></span>
+        <div class="min-w-0">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-black text-slate-200 tracking-wide">POS REG SYSTEM</span>
+            <span id="register-id-badge" onclick="event.stopPropagation(); switchTab('settings')" title="クリックでレジ番号を変更" class="inline-flex items-center gap-1 text-[10px] sm:text-xs font-black bg-blue-900/80 hover:bg-blue-800 text-blue-200 px-2 py-0.5 rounded-full border border-blue-500/40 cursor-pointer">
+              <span id="register-id-badge-text">レジ1</span>
+              <i class="fa-solid fa-pen text-[9px] opacity-70"></i>
+            </span>
+          </div>
+          <h1 id="shop-title-display" onclick="event.stopPropagation(); switchTab('settings')" title="クリックで店舗名を変更" class="text-base sm:text-lg font-black text-white hover:text-blue-300 tracking-wide truncate cursor-pointer transition-colors">
+            イベント・店舗 POSレジ
+          </h1>
+        </div>
+      </div>
+
+      <!-- 右側アクションボタン -->
+      <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        <!-- バーコードスキャナ起動ボタン -->
+        <button onclick="openCameraScanner('cart')" class="pos-btn bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold shadow-sm">
+          <i class="fa-solid fa-camera"></i>
+          <span class="hidden sm:inline">カメラスキャン</span>
+        </button>
+
+        <!-- サウンド切替 -->
+        <button id="sound-btn" onclick="toggleSound()" class="pos-btn bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold">
+          <span id="sound-icon">🔊</span>
+          <span class="hidden md:inline" id="sound-text">音: ON</span>
+        </button>
+
+        <!-- 操作ガイド -->
+        <button onclick="openHelpModal()" class="pos-btn bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold">
+          <i class="fa-solid fa-circle-question"></i>
+          <span class="hidden md:inline">ガイド</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- メインナビゲーションタブ（1行に収まる実用タブ） -->
+    <nav class="max-w-7xl mx-auto mt-2 flex gap-1.5 sm:gap-2 w-full">
+      <button onclick="switchTab('register')" id="tab-btn-register" class="nav-tab active-tab flex-1 py-2 px-2 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 bg-blue-600 text-white shadow-sm whitespace-nowrap">
+        <i class="fa-solid fa-cart-shopping"></i><span>レジ会計</span>
+      </button>
+      <button onclick="switchTab('sales')" id="tab-btn-sales" class="nav-tab flex-1 py-2 px-2 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 bg-slate-800/80 text-slate-300 hover:bg-slate-800 whitespace-nowrap">
+        <i class="fa-solid fa-chart-line"></i><span>売上分析</span>
+      </button>
+      <button onclick="switchTab('inventory')" id="tab-btn-inventory" class="nav-tab flex-1 py-2 px-2 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 bg-slate-800/80 text-slate-300 hover:bg-slate-800 whitespace-nowrap">
+        <i class="fa-solid fa-boxes-stacked"></i><span>在庫管理</span>
+      </button>
+      <button onclick="switchTab('cards')" id="tab-btn-cards" class="nav-tab flex-1 py-2 px-2 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 bg-slate-800/80 text-slate-300 hover:bg-slate-800 whitespace-nowrap">
+        <i class="fa-solid fa-barcode"></i><span>バーコード印刷</span>
+      </button>
+      <button onclick="switchTab('settings')" id="tab-btn-settings" class="nav-tab flex-1 py-2 px-2 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 bg-slate-800/80 text-slate-300 hover:bg-slate-800 whitespace-nowrap">
+        <i class="fa-solid fa-gear"></i><span>システム設定</span>
+      </button>
+    </nav>
+  </header>
+
+  <!-- メイン表示領域（各タブはアクティブ時に全画面幅いっぱいに展開） -->
+  <main class="flex-1 min-h-0 max-h-full overflow-hidden flex flex-col p-2.5 sm:p-4 max-w-[1600px] w-full mx-auto box-border">
+
+    <!-- 1. レジ会計画面 -->
+    <section id="screen-register" class="flex-1 min-h-0 max-h-full flex flex-col md:grid md:grid-cols-2 md:grid-rows-[1fr] gap-3 h-full overflow-hidden">
+
+      <!-- スマホ専用：カゴ / 商品 切り替えタブ（md以上では非表示） -->
+      <div class="md:hidden flex bg-slate-200 p-1 rounded-xl gap-1 shrink-0 mb-1 border border-slate-300">
+        <button id="mobile-toggle-products" onclick="switchMobileRegisterView('products')" class="flex-1 py-1.5 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 bg-white text-slate-900 shadow-sm">
+          <i class="fa-solid fa-store"></i><span>商品一覧</span>
+        </button>
+        <button id="mobile-toggle-cart" onclick="switchMobileRegisterView('cart')" class="flex-1 py-1.5 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 text-slate-600 hover:bg-white/50">
+          <i class="fa-solid fa-cart-shopping"></i><span>会計カゴ</span>
+          <span id="mobile-cart-badge" class="bg-blue-600 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">0</span>
+        </button>
+      </div>
+
+      <!-- 左側：お買い物カゴ & 会計操作パネル -->
+      <div id="register-cart-pane" class="hidden md:flex flex-col h-full min-h-0 max-h-full overflow-hidden flex-1">
+        <div class="pos-card p-3 sm:p-4 flex flex-col h-full min-h-0 max-h-full overflow-hidden">
+          <!-- カゴヘッダー -->
+          <div class="flex items-center justify-between pb-2.5 border-b border-slate-200 shrink-0">
+            <div class="flex items-center gap-2">
+              <span class="text-xl text-blue-600"><i class="fa-solid fa-cart-shopping"></i></span>
+              <h2 class="text-base sm:text-lg font-black text-slate-900">会計カゴ</h2>
+            </div>
+            <button onclick="clearCart(true)" class="pos-btn text-xs bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200 px-2.5 py-1 rounded-lg">
+              <i class="fa-solid fa-trash-can"></i><span>カゴをクリア</span>
+            </button>
+          </div>
+
+          <!-- カゴの中身リスト -->
+          <div id="cart-items" class="flex-1 overflow-y-auto min-h-0 my-2 space-y-2 pr-1 custom-scrollbar">
+            <!-- カゴの中身動的描画 -->
+          </div>
+
+          <!-- 合計金額・割引・会計ボタン（下部固定） -->
+          <div class="bg-slate-50 rounded-xl p-3 border border-slate-200 space-y-1.5 shrink-0">
+            <!-- 割引・値引き設定バー -->
+            <div class="flex items-center justify-between pb-1.5 border-b border-slate-200">
+              <span class="text-xs font-bold text-slate-600 flex items-center gap-1">
+                <i class="fa-solid fa-tag text-amber-500"></i>
+                <span>値引き / 割引</span>
+              </span>
+              <button id="cart-discount-btn" onclick="openDiscountModal()" class="pos-btn px-2.5 py-1 text-xs font-bold bg-white hover:bg-amber-50 text-slate-700 hover:text-amber-700 border border-slate-300 rounded-lg shadow-2xs flex items-center gap-1">
+                <span id="cart-discount-label">🏷️ 割引を設定</span>
+              </button>
+            </div>
+
+            <!-- 小計表示（割引適用時のみ表示） -->
+            <div id="cart-subtotal-row" class="hidden flex justify-between items-center text-xs font-bold text-slate-500">
+              <span>小計 (定価合計)</span>
+              <span>¥<span id="cart-subtotal">0</span></span>
+            </div>
+
+            <!-- 割引額表示 -->
+            <div id="cart-discount-row" class="hidden flex justify-between items-center text-xs font-bold text-rose-600">
+              <span id="cart-discount-name">割引</span>
+              <span>-¥<span id="cart-discount-val">0</span></span>
+            </div>
+
+            <div class="flex justify-between items-center text-xs sm:text-sm font-bold text-slate-600">
+              <span>合計点数</span>
+              <span id="cart-item-count" class="text-base font-black text-slate-800">0 点</span>
+            </div>
+            <div class="flex justify-between items-baseline pt-1 border-t border-slate-200">
+              <span class="text-sm sm:text-base font-bold text-slate-900">ご請求合計</span>
+              <div class="text-right">
+                <span id="cart-total" class="text-2xl sm:text-3xl font-black text-blue-600">0</span>
+                <span class="text-sm font-bold text-slate-600"> 円</span>
+              </div>
+            </div>
+
+            <button id="checkout-start-btn" onclick="openPaymentModal()" disabled class="pos-btn w-full py-2.5 sm:py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black text-base sm:text-lg rounded-xl shadow-sm flex items-center justify-center gap-2">
+              <i class="fa-solid fa-credit-card"></i>
+              <span>お支払いへ進む (会計)</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右側：商品一覧 & カテゴリ -->
+      <div id="register-products-pane" class="flex flex-col h-full min-h-0 max-h-full overflow-y-auto pr-1 pb-2 custom-scrollbar space-y-2.5 flex-1 relative">
+        <!-- クイックバーコードスキャンバナー -->
+        <div class="bg-slate-900 text-white rounded-xl p-2.5 sm:p-3 shadow-sm flex items-center justify-between gap-2 border border-slate-800 shrink-0">
+          <div class="flex items-center gap-2.5">
+            <span class="text-xl sm:text-2xl text-emerald-400 bg-slate-800 p-2 rounded-lg shrink-0">
+              <i class="fa-solid fa-barcode"></i>
+            </span>
+            <div class="min-w-0">
+              <p class="text-[11px] text-slate-400 font-bold hidden sm:block">USBバーコードリーダー / カメラ常時対応</p>
+              <h3 class="text-xs sm:text-sm font-black truncate">バーコードをスキャンして即時カゴ追加</h3>
+            </div>
+          </div>
+          <button onclick="openCameraScanner('cart')" class="pos-btn bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap shrink-0">
+            <i class="fa-solid fa-camera"></i>
+            <span>カメラ起動</span>
+          </button>
+        </div>
+
+        <!-- カテゴリ切り替えフィルター（上部にsticky固定） -->
+        <div class="bg-white/95 backdrop-blur-sm p-2 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-2 overflow-x-auto shrink-0 sticky top-0 z-10">
+          <div class="flex gap-1.5 overflow-x-auto" id="category-filter-list">
+            <!-- カテゴリボタン動的生成 -->
+          </div>
+          <button onclick="openCustomProductModal()" class="pos-btn bg-amber-500 hover:bg-amber-600 text-white text-xs px-3 py-1.5 rounded-lg font-bold shrink-0 shadow-sm whitespace-nowrap" title="名称・金額を直接入力してカゴに追加">
+            <i class="fa-solid fa-plus-circle"></i>
+            <span>手入力・その他</span>
+          </button>
+        </div>
+
+        <!-- 商品カードグリッド -->
+        <div id="product-grid" class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+          <!-- 商品カード動的生成 -->
+        </div>
+
+        <!-- スマホ専用：商品棚表示中の下部クイック会計バー -->
+        <div id="mobile-quick-cart-bar" onclick="switchMobileRegisterView('cart')" class="hidden md:hidden sticky bottom-1 left-0 right-0 z-20 bg-slate-900/95 backdrop-blur-md text-white p-2.5 rounded-xl shadow-xl flex items-center justify-between border border-slate-700 cursor-pointer">
+          <div class="flex items-center gap-2">
+            <span class="text-lg text-blue-400"><i class="fa-solid fa-cart-shopping"></i></span>
+            <div>
+              <span id="mobile-bar-count" class="text-xs font-bold text-slate-300">0点</span>
+              <span id="mobile-bar-total" class="text-base font-black ml-1 text-emerald-400">0 円</span>
+            </div>
+          </div>
+          <span class="pos-btn bg-blue-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg">
+            <span>カゴを開く</span>
+            <i class="fa-solid fa-chevron-right text-[10px]"></i>
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. 売上分析ダッシュボード（全画面表示） -->
+    <section id="screen-sales" class="hidden flex-1 min-h-0 overflow-y-auto custom-scrollbar h-full space-y-4 pr-1 pb-6 w-full">
+      <div class="pos-card p-4 sm:p-6 w-full">
+        <!-- 売上ヘッダー & CSVエクスポート群 -->
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+          <div>
+            <h2 class="text-xl sm:text-2xl font-black text-slate-900 flex items-center gap-2">
+              <i class="fa-solid fa-chart-line text-blue-600"></i>
+              <span>売上レポート & 分析ダッシュボード</span>
+            </h2>
+            <p class="text-xs sm:text-sm font-bold text-slate-500">本日の取引集計・客数・販売数のリアルタイム分析</p>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <!-- 商品別集計CSV -->
+            <button onclick="exportProductsSummaryCSV()" title="商品別の販売数・売上金額・残在庫数をCSV出力" class="pos-btn text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded-lg shadow-sm">
+              <i class="fa-solid fa-file-csv"></i>
+              <span>商品別集計CSV</span>
+            </button>
+            <!-- 全取引明細CSV -->
+            <button onclick="exportReceiptsDetailCSV()" title="全取引履歴（レシート単位）をCSV出力" class="pos-btn text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded-lg shadow-sm">
+              <i class="fa-solid fa-receipt"></i>
+              <span>全取引明細CSV</span>
+            </button>
+            <!-- 売上リセットボタン -->
+            <button onclick="resetSalesDataPrompt()" class="pos-btn text-xs font-bold bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-300 px-3 py-2 rounded-lg">
+              <i class="fa-solid fa-rotate-left mr-1"></i>売上リセット
+            </button>
+          </div>
+        </div>
+
+        <!-- 3大サマリーカード -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mt-4">
+          <div class="bg-blue-50/60 border border-blue-200 rounded-xl p-4 text-center">
+            <span class="text-xs font-bold text-blue-900 block">総売上金額</span>
+            <div class="text-2xl sm:text-3xl font-black text-blue-600 mt-1">
+              <span id="sales-total-amount">0</span><span class="text-base font-bold text-slate-600"> 円</span>
+            </div>
+          </div>
+          <div class="bg-emerald-50/60 border border-emerald-200 rounded-xl p-4 text-center">
+            <span class="text-xs font-bold text-emerald-900 block">総客数 (会計回数)</span>
+            <div class="text-2xl sm:text-3xl font-black text-emerald-600 mt-1">
+              <span id="sales-customer-count">0</span><span class="text-base font-bold text-slate-600"> 人</span>
+            </div>
+          </div>
+          <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center">
+            <span class="text-xs font-bold text-slate-700 block">販売商品総数</span>
+            <div class="text-2xl sm:text-3xl font-black text-slate-800 mt-1">
+              <span id="sales-items-sold">0</span><span class="text-base font-bold text-slate-600"> 点</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ランキング & レシート履歴（VOID機能付き） -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-5">
+          <!-- ランキング -->
+          <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
+            <h3 class="font-black text-sm sm:text-base text-slate-800 mb-3 flex items-center gap-1.5">
+              <i class="fa-solid fa-ranking-star text-amber-500"></i>
+              <span>商品別 販売ランキング</span>
+            </h3>
+            <div id="sales-ranking-list" class="space-y-2">
+              <!-- ランキング動的生成 -->
+            </div>
+          </div>
+
+          <!-- レシート履歴 -->
+          <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="font-black text-sm sm:text-base text-slate-800 flex items-center gap-1.5">
+                <i class="fa-solid fa-clock-rotate-left text-slate-600"></i>
+                <span>直近の取引履歴</span>
+              </h3>
+              <span class="text-xs text-slate-500 font-bold">誤会計は「取消」で在庫復元</span>
+            </div>
+            <div id="sales-history-list" class="space-y-2 max-h-[380px] overflow-y-auto pr-1 text-sm custom-scrollbar">
+              <!-- レシート履歴動的生成（VOIDボタン付き） -->
+            </div>
+          </div>
+        </div>
+
+        <!-- 複数端末の売上合算ツール（マージ集計機能エリア） -->
+        <div class="bg-indigo-50/50 border border-indigo-200 rounded-xl p-4 sm:p-5 mt-5">
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-indigo-100 pb-3">
+            <div>
+              <h3 class="font-black text-base sm:text-lg text-indigo-950 flex items-center gap-2">
+                <i class="fa-solid fa-code-merge text-indigo-600"></i>
+                <span>複数レジの売上データを合算（マージ集計）</span>
+              </h3>
+              <p class="text-xs font-bold text-indigo-700 mt-0.5">
+                同ブースで複数端末（レジ1、レジ2等）を使った場合、各端末のJSONファイルをまとめて読み込んで取引重複を排除し、一括集計します。
+              </p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button type="button" onclick="openSalesQrModal()" class="pos-btn bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm px-3.5 py-2 rounded-lg shadow-sm" title="この端末の売上データをQRコードで画面表示">
+                <i class="fa-solid fa-qrcode"></i>
+                <span>このレジの売上QRを表示</span>
+              </button>
+              <button type="button" onclick="openCameraScanner('sales-merge')" class="pos-btn bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm px-3.5 py-2 rounded-lg shadow-sm" title="カメラで他端末の売上QRを読み取って合算">
+                <i class="fa-solid fa-camera"></i>
+                <span>カメラで売上QR読込合算</span>
+              </button>
+              <label class="pos-btn bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm px-3.5 py-2 rounded-lg cursor-pointer shadow-sm">
+                <i class="fa-solid fa-folder-open"></i>
+                <span>JSONファイル選択</span>
+                <input type="file" id="merge-json-input" multiple accept=".json,application/json" onchange="handleMergeFilesInput(event)" class="hidden">
+              </label>
+            </div>
+          </div>
+
+          <!-- ドラッグ＆ドロップゾーン -->
+          <div id="merge-dropzone" ondragover="handleMergeDragOver(event)" ondragleave="handleMergeDragLeave(event)" ondrop="handleMergeDrop(event)" class="mt-3 border-2 border-dashed border-indigo-300 rounded-xl p-5 text-center bg-white/70 hover:bg-indigo-50/70 transition-all cursor-pointer">
+            <div class="text-2xl text-indigo-500 mb-1"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+            <p class="font-bold text-xs sm:text-sm text-indigo-950">ここに各端末のJSONバックアップファイルをドラッグ＆ドロップ</p>
+            <p class="text-[11px] text-slate-500 mt-0.5">（複数ファイルをまとめてドロップまたはボタンから一括選択できます）</p>
+          </div>
+
+          <!-- 合算集計結果表示コンテナ -->
+          <div id="merge-result-container" class="hidden mt-4 space-y-3">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <div class="bg-white p-3 rounded-xl border border-indigo-200 text-center shadow-sm">
+                <span class="text-xs text-slate-500 font-bold block">合算 総売上</span>
+                <span id="merge-sum-revenue" class="text-xl font-black text-indigo-600">0円</span>
+              </div>
+              <div class="bg-white p-3 rounded-xl border border-indigo-200 text-center shadow-sm">
+                <span class="text-xs text-slate-500 font-bold block">合算 客数</span>
+                <span id="merge-sum-customers" class="text-xl font-black text-slate-800">0人</span>
+              </div>
+              <div class="bg-white p-3 rounded-xl border border-indigo-200 text-center shadow-sm">
+                <span class="text-xs text-slate-500 font-bold block">合算 販売総数</span>
+                <span id="merge-sum-items" class="text-xl font-black text-slate-800">0点</span>
+              </div>
+              <div class="bg-white p-3 rounded-xl border border-indigo-200 text-center shadow-sm">
+                <span class="text-xs text-slate-500 font-bold block">読込端末数</span>
+                <span id="merge-sum-registers" class="text-xl font-black text-emerald-600">0台</span>
+              </div>
+            </div>
+
+            <!-- 内訳テーブル -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <div class="bg-white p-3 rounded-xl border border-indigo-200 shadow-sm">
+                <h4 class="font-bold text-xs text-indigo-950 mb-2">端末（レジ）別 内訳</h4>
+                <div id="merge-registers-breakdown" class="space-y-1 text-xs max-h-40 overflow-y-auto"></div>
+              </div>
+              <div class="bg-white p-3 rounded-xl border border-indigo-200 shadow-sm">
+                <h4 class="font-bold text-xs text-indigo-950 mb-2">合算 商品別販売数</h4>
+                <div id="merge-products-breakdown" class="space-y-1 text-xs max-h-40 overflow-y-auto"></div>
+              </div>
+            </div>
+
+            <div class="flex justify-end pt-1">
+              <button onclick="exportMergedCSV()" class="pos-btn bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-3.5 py-2 rounded-lg">
+                <i class="fa-solid fa-file-csv"></i>
+                <span>合算データ（商品別・全取引）をCSVダウンロード</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. 在庫・商品管理（全画面表示） -->
+    <section id="screen-inventory" class="hidden flex-1 min-h-0 overflow-y-auto custom-scrollbar h-full space-y-4 pr-1 pb-6 w-full">
+      <div class="pos-card p-4 sm:p-6 w-full">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+          <div>
+            <h2 class="text-xl sm:text-2xl font-black text-slate-900 flex items-center gap-2">
+              <i class="fa-solid fa-boxes-stacked text-emerald-600"></i>
+              <span>商品の在庫管理 & 補充</span>
+            </h2>
+            <p class="text-xs sm:text-sm font-bold text-slate-500">残在庫数のリアルタイム確認とワンクリック在庫補充</p>
+          </div>
+          <button onclick="restockAllProducts(5)" class="pos-btn bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-xs sm:text-sm font-bold">
+            <i class="fa-solid fa-plus-circle"></i>
+            <span>全商品 +5個 まとめて補充</span>
+          </button>
+        </div>
+
+        <div id="inventory-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
+          <!-- 在庫一覧カード動的描画 -->
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. バーコード印刷（全画面表示） -->
+    <section id="screen-cards" class="hidden flex-1 min-h-0 overflow-y-auto custom-scrollbar h-full space-y-4 pr-1 pb-6 w-full">
+      <div class="pos-card p-4 sm:p-6 w-full">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3 no-print">
+          <div>
+            <h2 class="text-xl sm:text-2xl font-black text-slate-900 flex items-center gap-2">
+              <i class="fa-solid fa-barcode text-blue-600"></i>
+              <span>商品バーコードカード印刷</span>
+            </h2>
+            <p class="text-xs sm:text-sm font-bold text-slate-500">
+              追加した商品も即座に反映。A4用紙に印刷して切り取れば、即席の商品メニューPOPとして利用可能です。
+            </p>
+          </div>
+          <div class="flex gap-2">
+            <button onclick="printAllBarcodeCards()" class="pos-btn bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-xs sm:text-sm font-bold">
+              <i class="fa-solid fa-print"></i>
+              <span>全件印刷（A4用紙）</span>
+            </button>
+            <button onclick="switchTab('settings')" class="pos-btn bg-slate-800 hover:bg-slate-700 text-white px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold">
+              <i class="fa-solid fa-plus"></i>
+              <span>新商品を追加</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 印刷カードグリッド -->
+        <div id="printable-barcode-sheet" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mt-5">
+          <!-- JsBarcodeで動的生成されるカード -->
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. システム設定（全画面表示） -->
+    <section id="screen-settings" class="hidden flex-1 min-h-0 overflow-y-auto custom-scrollbar h-full space-y-4 pr-1 pb-6 w-full">
+      <div class="pos-card p-4 sm:p-6 w-full space-y-5">
+        <div>
+          <h2 class="text-xl sm:text-2xl font-black text-slate-900 flex items-center gap-2">
+            <i class="fa-solid fa-gear text-slate-600"></i>
+            <span>システム設定 & 商品管理</span>
+          </h2>
+          <p class="text-xs sm:text-sm font-bold text-slate-500">
+            端末名設定、新規商品の追加、データバックアップ、プリセット切り替えが行えます。
+          </p>
+        </div>
+
+        <!-- 1. 店舗・イベント名 & レジ端末名設定 -->
+        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+          <div class="flex items-center justify-between border-b border-slate-200 pb-2">
+            <h3 class="font-black text-sm sm:text-base text-slate-900 flex items-center gap-1.5">
+              <i class="fa-solid fa-store text-blue-600"></i>
+              <span>店舗・イベント名 & レジ端末設定</span>
+            </h3>
+            <span class="text-xs text-slate-500 font-bold">即時自動保存</span>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">
+                🏪 店舗名・イベント名（例: 🏮 縁日・模擬店 POSレジ）
+              </label>
+              <input type="text" id="setting-shop-title" placeholder="店舗・イベント名" oninput="handleShopTitleChange(this.value)" class="w-full font-bold bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">
+                🏷️ この端末のレジ名称（例: レジ1, テント東側, ドリンク担当）
+              </label>
+              <input type="text" id="setting-register-id" value="レジ1" placeholder="レジ1" oninput="handleRegisterIdChange(this.value)" class="w-full font-bold bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+            </div>
+          </div>
+          <span class="text-[11px] text-slate-500 block">※ヘッダー表示、レシート印字、および合算集計時の端末名として即時反映されます。</span>
+        </div>
+
+        <!-- 2. 新規商品登録フォーム -->
+        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+          <div class="flex items-center justify-between border-b border-slate-200 pb-2">
+            <h3 class="font-black text-sm sm:text-base text-slate-900 flex items-center gap-1.5">
+              <i class="fa-solid fa-plus-circle text-emerald-600"></i>
+              <span>新規商品の登録</span>
+            </h3>
+            <span class="text-xs font-bold text-slate-500">バーコード自動採番機能つき</span>
+          </div>
+
+          <form onsubmit="handleAddNewProduct(event)" class="space-y-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3">
+              <!-- アイコン/絵文字 -->
+              <div class="lg:col-span-2">
+                <label class="block text-xs font-bold text-slate-700 mb-1">アイコン</label>
+                <input type="text" id="new-prod-emoji" value="🏷️" maxlength="2" required class="w-full text-center text-2xl font-bold bg-white border border-slate-300 rounded-lg py-1 focus:outline-none focus:border-blue-500">
+              </div>
+
+              <!-- 商品名 -->
+              <div class="sm:col-span-1 lg:col-span-4">
+                <label class="block text-xs font-bold text-slate-700 mb-1">商品名</label>
+                <input type="text" id="new-prod-name" placeholder="例: やきそば" required class="w-full font-bold bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+              </div>
+
+              <!-- 単価 -->
+              <div class="lg:col-span-2">
+                <label class="block text-xs font-bold text-slate-700 mb-1">単価（円）</label>
+                <input type="number" id="new-prod-price" min="1" max="999999" step="1" value="500" required class="w-full font-bold bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+              </div>
+
+              <!-- 初期在庫 -->
+              <div class="lg:col-span-2">
+                <label class="block text-xs font-bold text-slate-700 mb-1">初期在庫数</label>
+                <input type="number" id="new-prod-stock" min="1" max="9999" value="20" required class="w-full font-bold bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+              </div>
+
+              <!-- カテゴリ -->
+              <div class="lg:col-span-2">
+                <label class="block text-xs font-bold text-slate-700 mb-1">カテゴリ</label>
+                <select id="new-prod-category" class="w-full font-bold bg-white border border-slate-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:border-blue-500">
+                  <option value="フード">フード</option>
+                  <option value="ドリンク">ドリンク</option>
+                  <option value="スイーツ">スイーツ</option>
+                  <option value="グッズ">グッズ</option>
+                  <option value="ゲーム・体験">ゲーム・体験</option>
+                  <option value="その他">その他</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- バーコード番号とプレビュー -->
+            <div class="bg-white p-3 rounded-lg border border-slate-200 space-y-2">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <label class="block text-xs font-bold text-slate-700">
+                  🏷️ バーコード番号（重複しない番号を自動発行）
+                </label>
+                <div class="flex gap-2">
+                  <button type="button" onclick="regenerateNewProductBarcode()" class="pos-btn bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs px-2.5 py-1 rounded-md">
+                    <i class="fa-solid fa-arrows-rotate"></i>
+                    <span>再発行</span>
+                  </button>
+                  <button type="button" onclick="openCameraScanner('form')" class="pos-btn bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-2.5 py-1 rounded-md">
+                    <i class="fa-solid fa-camera"></i>
+                    <span>カメラ読取</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+                <div class="md:col-span-5">
+                  <input type="text" id="new-prod-barcode" oninput="updateFormBarcodePreview()" placeholder="490000000000" class="w-full font-mono text-sm font-bold text-slate-800 bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5">
+                </div>
+                <div class="md:col-span-7 flex flex-col items-center justify-center bg-white p-1 rounded-lg border border-dashed border-slate-300">
+                  <svg id="form-barcode-preview" class="max-w-full h-10"></svg>
+                  <span id="form-barcode-preview-text" class="text-[10px] font-mono text-slate-400">プレビュー</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex justify-end pt-1">
+              <button type="submit" class="pos-btn bg-emerald-600 hover:bg-emerald-500 text-white text-sm py-2.5 px-6 rounded-xl">
+                <i class="fa-solid fa-plus-circle"></i>
+                <span>商品を追加する</span>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- 3. 登録済み商品の一覧 -->
+        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+          <div class="flex items-center justify-between mb-2.5">
+            <h3 class="font-bold text-sm text-slate-800">
+              登録商品一覧（<span id="registered-prods-count">0</span>件）
+            </h3>
+            <button onclick="switchTab('cards')" class="text-xs font-bold text-blue-600 hover:underline">
+              バーコードカードを見る →
+            </button>
+          </div>
+          <div id="settings-products-table" class="space-y-1.5 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
+            <!-- 登録商品動的生成 -->
+          </div>
+        </div>
+
+        <!-- 4. 実用プリセット切り替え -->
+        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+          <h3 class="font-bold text-sm text-slate-800 mb-1">業態別プリセット</h3>
+          <p class="text-xs text-slate-500 mb-2.5">業態に応じたメニューとバーコードの初期データを即座に読み込めます：</p>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <button onclick="loadPresetShop('festival')" class="pos-btn bg-white hover:bg-slate-100 border border-slate-300 p-2.5 rounded-lg text-slate-800 text-xs flex-col gap-1">
+              <span class="text-xl">🏮</span>
+              <span>縁日・模擬店</span>
+            </button>
+            <button onclick="loadPresetShop('cafe')" class="pos-btn bg-white hover:bg-slate-100 border border-slate-300 p-2.5 rounded-lg text-slate-800 text-xs flex-col gap-1">
+              <span class="text-xl">☕</span>
+              <span>カフェ・ドリンク</span>
+            </button>
+            <button onclick="loadPresetShop('goods')" class="pos-btn bg-white hover:bg-slate-100 border border-slate-300 p-2.5 rounded-lg text-slate-800 text-xs flex-col gap-1">
+              <span class="text-xl">🛍️</span>
+              <span>イベント物販</span>
+            </button>
+            <button onclick="loadPresetShop('food')" class="pos-btn bg-white hover:bg-slate-100 border border-slate-300 p-2.5 rounded-lg text-slate-800 text-xs flex-col gap-1">
+              <span class="text-xl">🍱</span>
+              <span>フード・軽食</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 5. JSONバックアップ -->
+        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+          <h3 class="font-bold text-sm text-slate-800 mb-1">データのバックアップ & 復元 (JSON)</h3>
+          <p class="text-xs text-slate-500 mb-2.5">
+            商品マスター・在庫・売上記録をJSONファイルとして保存したり、別端末に移行できます。
+          </p>
+          <div class="flex flex-wrap gap-2.5">
+            <button onclick="exportDataJSON()" class="pos-btn flex-1 min-w-[200px] bg-slate-800 hover:bg-slate-700 text-white text-xs sm:text-sm py-2.5 px-4 rounded-lg">
+              <i class="fa-solid fa-download"></i>
+              <span>バックアップ保存 (JSONダウンロード)</span>
+            </button>
+            <label class="pos-btn flex-1 min-w-[200px] bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm py-2.5 px-4 rounded-lg cursor-pointer">
+              <i class="fa-solid fa-upload"></i>
+              <span>バックアップ復元 (JSON読み込み)</span>
+              <input type="file" id="json-file-input" accept=".json,application/json" onchange="importDataJSON(event)" class="hidden">
+            </label>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ================= モーダル群 ================= -->
+
+  <!-- 1. カメラ・バーコードスキャナーモーダル -->
+  <div id="camera-modal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 hidden flex flex-col items-center justify-center p-3 sm:p-5">
+    <div class="relative w-full max-w-lg bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl flex flex-col">
+      <div class="p-3 bg-slate-800 border-b border-slate-700 flex items-center justify-between text-white">
+        <div class="flex items-center gap-2">
+          <span class="text-emerald-400 text-xl"><i class="fa-solid fa-barcode"></i></span>
+          <div>
+            <h3 class="font-bold text-sm sm:text-base" id="scanner-purpose-title">バーコードリーダー</h3>
+            <p id="camera-facing-label" class="text-xs text-slate-400">背面カメラ</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="toggleCameraFacing()" class="pos-btn bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs px-2.5 py-1.5 rounded-lg">
+            <i class="fa-solid fa-arrows-rotate"></i>
+            <span id="facing-toggle-text">カメラ切替</span>
+          </button>
+          <button onclick="closeCameraScannerModal()" class="text-slate-400 hover:text-white text-xl font-bold px-2">✕</button>
+        </div>
+      </div>
+
+      <!-- ビデオカメラプレビュー領域 -->
+      <div class="relative w-full aspect-square sm:aspect-[4/3] bg-black flex items-center justify-center overflow-hidden">
+        <div class="absolute inset-6 border border-white/50 rounded-xl z-10 pointer-events-none flex flex-col items-center justify-between p-2">
+          <div class="w-full flex items-center justify-between">
+            <div class="w-6 h-6 border-t-2 border-l-2 border-emerald-400 rounded-tl-lg"></div>
+            <span class="bg-black/75 text-white font-bold text-[11px] px-2.5 py-0.5 rounded-full border border-white/20">
+              枠内にバーコードを合わせてください
+            </span>
+            <div class="w-6 h-6 border-t-2 border-r-2 border-emerald-400 rounded-tr-lg"></div>
+          </div>
+          <div class="scan-laser"></div>
+          <div class="w-full flex justify-between">
+            <div class="w-6 h-6 border-b-2 border-l-2 border-emerald-400 rounded-bl-lg"></div>
+            <div class="w-6 h-6 border-b-2 border-r-2 border-emerald-400 rounded-br-lg"></div>
+          </div>
+        </div>
+
+        <div id="qr-shaded-region" class="w-full h-full flex items-center justify-center">
+          <div id="qr-reader" class="w-full h-full"></div>
+        </div>
+
+        <div id="camera-loading-spinner" class="absolute inset-0 bg-slate-900 flex flex-col items-center justify-center text-white gap-2">
+          <i class="fa-solid fa-circle-notch fa-spin text-3xl text-emerald-500"></i>
+          <p class="font-bold text-xs text-slate-300">カメラ起動中...</p>
+        </div>
+      </div>
+
+      <!-- 下部バー -->
+      <div class="p-2.5 bg-slate-800 border-t border-slate-700 flex items-center justify-between gap-2">
+        <label class="pos-btn bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs px-3 py-1.5 rounded-lg cursor-pointer">
+          <i class="fa-solid fa-image"></i>
+          <span>写真読取</span>
+          <input type="file" accept="image/*" onchange="scanBarcodeFromImageFile(event)" class="hidden">
+        </label>
+        <button onclick="openManualBarcodeEntry()" class="pos-btn bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs px-3 py-1.5 rounded-lg">
+          <i class="fa-solid fa-keyboard"></i>
+          <span>手入力</span>
+        </button>
+        <button onclick="closeCameraScannerModal()" class="pos-btn bg-slate-600 hover:bg-slate-500 text-white text-xs px-3.5 py-1.5 rounded-lg">
+          閉じる
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. 未登録バーコード検出モーダル -->
+  <div id="unknown-barcode-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+    <div class="pos-card p-5 sm:p-6 max-w-md w-full shadow-2xl space-y-4">
+      <div class="text-center">
+        <div class="text-4xl text-amber-500 mb-1"><i class="fa-solid fa-triangle-exclamation"></i></div>
+        <h3 class="text-lg sm:text-xl font-black text-slate-900">未登録のバーコードを検出</h3>
+        <p class="text-xs text-slate-500 mt-0.5">商品マスターに存在しないバーコードです</p>
+      </div>
+
+      <div class="bg-slate-100 rounded-lg p-2.5 text-center font-mono font-bold text-base text-slate-800">
+        <span id="unknown-barcode-number">490000000000</span>
+      </div>
+
+      <div class="space-y-2 pt-1">
+        <button onclick="forwardBarcodeToNewProduct()" class="pos-btn w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm rounded-lg">
+          <i class="fa-solid fa-plus-circle"></i>
+          <span>このバーコードで新商品を登録</span>
+        </button>
+
+        <div class="pt-2 border-t border-slate-200">
+          <label class="block text-xs font-bold text-slate-600 mb-1">既存の商品にひもづける：</label>
+          <div class="flex gap-2">
+            <select id="unknown-assign-select" class="flex-1 font-bold text-xs bg-white border border-slate-300 rounded-lg px-2 py-1.5"></select>
+            <button onclick="assignBarcodeToSelectedProduct()" class="pos-btn bg-slate-800 text-white text-xs px-3 py-1.5 rounded-lg">
+              登録
+            </button>
+          </div>
+        </div>
+
+        <button onclick="closeUnknownBarcodeModal()" class="w-full py-1 text-xs text-slate-400 hover:text-slate-600 pt-1">
+          キャンセル
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. お会計・お支払いモーダル（完全実用高速テンキーUI） -->
+  <div id="payment-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-3 sm:p-4">
+    <div class="pos-card max-w-lg w-full p-4 sm:p-6 overflow-hidden max-h-[92vh] flex flex-col shadow-2xl">
+      <!-- ヘッダー -->
+      <div class="flex justify-between items-center border-b border-slate-200 pb-2.5">
+        <div class="flex items-center gap-2">
+          <span class="text-xl text-blue-600"><i class="fa-solid fa-cash-register"></i></span>
+          <h3 class="text-lg sm:text-xl font-black text-slate-900">お会計・お支払い</h3>
+        </div>
+        <button onclick="closePaymentModal()" class="text-xl font-bold text-slate-400 hover:text-slate-600 px-2 py-1">✕</button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto py-3 space-y-3 custom-scrollbar">
+        <!-- 金額表示カード（請求合計・お預かり・おつり） -->
+        <div class="bg-slate-50 rounded-xl p-3 border border-slate-200 grid grid-cols-3 gap-2 text-center">
+          <div>
+            <span class="text-xs font-bold text-slate-500 block">ご請求合計</span>
+            <span id="pay-total-display" class="text-xl sm:text-2xl font-black text-slate-900">0</span>
+            <span class="text-xs font-bold text-slate-600">円</span>
+          </div>
+          <div class="border-x border-slate-200">
+            <span class="text-xs font-bold text-slate-500 block">お預かり金額</span>
+            <span id="pay-received-display" class="text-xl sm:text-2xl font-black text-blue-600">0</span>
+            <span class="text-xs font-bold text-slate-600">円</span>
+          </div>
+          <div>
+            <span class="text-xs font-bold text-slate-500 block">おつり</span>
+            <span id="pay-change-display" class="text-xl sm:text-2xl font-black text-emerald-600">0</span>
+            <span class="text-xs font-bold text-slate-600">円</span>
+          </div>
+        </div>
+
+        <!-- ワンタップ金種加算ボタン -->
+        <div>
+          <label class="block text-xs font-bold text-slate-600 mb-1.5">
+            ⚡ クイック金種入力:
+          </label>
+          <div class="grid grid-cols-5 gap-1.5">
+            <button type="button" onclick="payExactAmount()" class="numpad-btn py-2 px-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-white text-xs sm:text-sm font-bold shadow-sm">
+              ぴったり
+            </button>
+            <button type="button" onclick="addQuickMoney(500)" class="numpad-btn py-2 px-1 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs sm:text-sm font-bold border border-slate-300">
+              +500円
+            </button>
+            <button type="button" onclick="addQuickMoney(1000)" class="numpad-btn py-2 px-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm font-bold shadow-sm">
+              +1,000円
+            </button>
+            <button type="button" onclick="addQuickMoney(5000)" class="numpad-btn py-2 px-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-bold shadow-sm">
+              +5,000円
+            </button>
+            <button type="button" onclick="addQuickMoney(10000)" class="numpad-btn py-2 px-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-bold shadow-sm">
+              +1万円
+            </button>
+          </div>
+        </div>
+
+        <!-- 電卓風テンキー（直接金額入力） -->
+        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-bold text-slate-600">🔢 金額入力テンキー</span>
+            <button type="button" onclick="clearInsertedMoney()" class="text-xs font-bold text-rose-600 hover:underline">
+              クリア (C)
+            </button>
+          </div>
+          <div class="grid grid-cols-4 gap-2">
+            <button type="button" onclick="inputNumpadDigit('7')" class="numpad-btn py-3 bg-white hover:bg-slate-100 text-slate-900 text-lg border border-slate-300 shadow-sm">7</button>
+            <button type="button" onclick="inputNumpadDigit('8')" class="numpad-btn py-3 bg-white hover:bg-slate-100 text-slate-900 text-lg border border-slate-300 shadow-sm">8</button>
+            <button type="button" onclick="inputNumpadDigit('9')" class="numpad-btn py-3 bg-white hover:bg-slate-100 text-slate-900 text-lg border border-slate-300 shadow-sm">9</button>
+            <button type="button" onclick="clearInsertedMoney()" class="numpad-btn py-3 bg-rose-100 hover:bg-rose-200 text-rose-700 text-base font-bold border border-rose-300 shadow-sm">C</button>
+
+            <button type="button" onclick="inputNumpadDigit('4')" class="numpad-btn py-3 bg-white hover:bg-slate-100 text-slate-900 text-lg border border-slate-300 shadow-sm">4</button>
+            <button type="button" onclick="inputNumpadDigit('5')" class="numpad-btn py-3 bg-white hover:bg-slate-100 text-slate-900 text-lg border border-slate-300 shadow-sm">5</button>
+            <button type="button" onclick="inputNumpadDigit('6')" class="numpad-btn py-3 bg-white hover:bg-slate-100 text-slate-900 text-lg border border-slate-300 shadow-sm">6</button>
+            <button type="button" onclick="inputNumpadBackspace()" class="numpad-btn py-3 bg-slate-200 hover:bg-slate-300 text-slate-800 text-base font-bold border border-slate-300 shadow-sm">⌫</button>
+
+            <button type="button" onclick="inputNumpadDigit('1')" class="numpad-btn py-3 bg-white hover:bg-slate-100 text-slate-900 text-lg border border-slate-300 shadow-sm">1</button>
+            <button type="button" onclick="inputNumpadDigit('2')" class="numpad-btn py-3 bg-white hover:bg-slate-100 text-slate-900 text-lg border border-slate-300 shadow-sm">2</button>
+            <button type="button" onclick="inputNumpadDigit('3')" class="numpad-btn py-3 bg-white hover:bg-slate-100 text-slate-900 text-lg border border-slate-300 shadow-sm">3</button>
+            <button type="button" onclick="inputNumpadDigit('00')" class="numpad-btn py-3 bg-slate-100 hover:bg-slate-200 text-slate-900 text-base border border-slate-300 shadow-sm">00</button>
+
+            <button type="button" onclick="inputNumpadDigit('0')" class="col-span-2 numpad-btn py-3 bg-white hover:bg-slate-100 text-slate-900 text-lg border border-slate-300 shadow-sm">0</button>
+            <button type="button" onclick="payExactAmount()" class="col-span-2 numpad-btn py-3 bg-amber-500 hover:bg-amber-400 text-white text-sm font-bold shadow-sm">ぴったり同額</button>
+          </div>
+        </div>
+
+        <!-- 不足・充足メッセージ -->
+        <div id="payment-status-box" class="p-2.5 rounded-lg text-center font-bold text-xs sm:text-sm bg-rose-50 text-rose-700 border border-rose-200">
+          あと <span id="pay-shortage-amount">0</span> 円 不足しています
+        </div>
+      </div>
+
+      <!-- 会計完了ボタン -->
+      <div class="pt-2 border-t border-slate-200">
+        <button id="complete-sale-btn" onclick="executeCompleteSale()" disabled class="pos-btn w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black text-base sm:text-lg rounded-xl shadow-sm">
+          <i class="fa-solid fa-circle-check"></i>
+          <span id="complete-sale-btn-text">会計完了 [Enter]</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. 巨大おつり表示モーダル（【要件3修正】3秒消滅を廃止しタップ消滅に特化） -->
+  <div id="change-popup-modal" onclick="dismissChangePopup()" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 hidden flex flex-col items-center justify-center p-4 cursor-pointer select-none">
+    <div class="pos-card p-6 sm:p-10 max-w-lg w-full text-center shadow-2xl border-2 border-emerald-500 popup-zoom-in" onclick="event.stopPropagation(); dismissChangePopup();">
+      <div class="inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold tracking-wide text-emerald-700 bg-emerald-100 px-3 py-1 rounded-full uppercase mb-2">
+        <i class="fa-solid fa-circle-check"></i> お会計完了
+      </div>
+
+      <div class="text-slate-500 font-bold text-sm mt-1">おつり</div>
+      <div id="popup-change-amount" class="text-5xl sm:text-7xl font-black text-emerald-600 my-3 tracking-tight">
+        ¥0
+      </div>
+
+      <!-- 取引サマリー（確認用） -->
+      <div class="bg-slate-50 rounded-xl p-3 border border-slate-200 text-xs text-slate-600 space-y-1 my-3 text-left">
+        <div class="flex justify-between font-bold">
+          <span>ご請求合計:</span>
+          <span id="popup-total-amount" class="text-slate-900 font-black">¥0</span>
+        </div>
+        <div class="flex justify-between font-bold">
+          <span>お預かり金額:</span>
+          <span id="popup-paid-amount" class="text-blue-600 font-black">¥0</span>
+        </div>
+      </div>
+
+      <!-- タップ・Enter消滅の案内 -->
+      <button type="button" onclick="dismissChangePopup()" class="pos-btn w-full mt-3 py-3.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-black text-base rounded-xl shadow-md">
+        <span>次のお会計へ進む (画面タップまたはEnter)</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- 5. 汎用確認・アラートモーダル -->
+  <div id="alert-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="pos-card p-5 max-w-sm w-full shadow-2xl text-center space-y-3">
+      <div id="alert-icon" class="text-3xl text-blue-600"><i class="fa-solid fa-bell"></i></div>
+      <h4 id="alert-title" class="text-base sm:text-lg font-black text-slate-900">お知らせ</h4>
+      <p id="alert-message" class="text-xs sm:text-sm font-bold text-slate-600 whitespace-pre-line leading-relaxed"></p>
+
+      <div id="alert-input-container" class="hidden text-left pt-1">
+        <input type="text" id="alert-prompt-input" placeholder="入力してください" class="w-full font-bold bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-blue-500">
+      </div>
+
+      <div id="alert-actions" class="flex gap-2 justify-center pt-2">
+        <button onclick="closeAlertModal()" class="pos-btn w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-lg">
+          OK
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. 操作ガイドモーダル -->
+  <div id="help-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="pos-card p-5 max-w-md w-full shadow-2xl space-y-3.5 max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center border-b border-slate-200 pb-2">
+        <h3 class="text-base sm:text-lg font-black text-slate-900 flex items-center gap-1.5">
+          <i class="fa-solid fa-book-open text-blue-600"></i>
+          <span>操作ガイド & ショートカット</span>
+        </h3>
+        <button onclick="closeHelpModal()" class="text-xl font-bold text-slate-400 hover:text-slate-600">✕</button>
+      </div>
+      <div class="space-y-2.5 text-xs sm:text-sm text-slate-700">
+        <div class="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
+          <p class="font-bold text-slate-900">1. バーコードスキャン & カゴ追加</p>
+          <p class="text-xs text-slate-600 mt-0.5">画面上のどこにいても、市販のUSB/Bluetoothバーコードリーダーをかざすと自動で商品を検知してカゴに追加します。カメラによるスキャンにも対応しています。</p>
+        </div>
+        <div class="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
+          <p class="font-bold text-slate-900">2. 高速テンキー & ワンタップ金種</p>
+          <p class="text-xs text-slate-600 mt-0.5">「お支払いへ進む」から、「ぴったり」や「+1,000円」ボタン、電卓風テンキーで即座にお預かりを入力。[Enter] キーで即会計完了できます。</p>
+        </div>
+        <div class="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
+          <p class="font-bold text-slate-900">3. 巨大おつり表示 (タップで次客へ)</p>
+          <p class="text-xs text-slate-600 mt-0.5">会計完了時に巨大フォントでおつりを表示。おつりを渡し終えたら画面タップまたは [Enter] キーで即座にカゴをクリアして次客待機へ進みます。</p>
+        </div>
+        <div class="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
+          <p class="font-bold text-slate-900">4. 取引取消 (VOID) & 在庫自動復元</p>
+          <p class="text-xs text-slate-600 mt-0.5">売上分析画面の取引履歴から「取消」ボタンを押すと、売上・客数を減算し、販売された在庫を自動で復元します。</p>
+        </div>
+        <div class="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
+          <p class="font-bold text-slate-900">5. 複数端末の合算 (マージ集計) & CSV出力</p>
+          <p class="text-xs text-slate-600 mt-0.5">複数端末のJSONファイルを売上画面にドラッグ＆ドロップするだけで重複排除して一括集計。商品別・全取引明細のUTF-8 BOM付きCSVを出力できます。</p>
+        </div>
+      </div>
+      <button onclick="closeHelpModal()" class="pos-btn w-full py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm font-bold rounded-lg">
+        閉じる
+      </button>
+    </div>
+  </div>
+
+  <!-- 7. 商品データ編集モーダル -->
+  <div id="edit-product-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-3 sm:p-4">
+    <div class="pos-card max-w-lg w-full p-5 sm:p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto custom-scrollbar">
+      <div class="flex justify-between items-center border-b border-slate-200 pb-2.5">
+        <h3 class="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
+          <i class="fa-solid fa-pen-to-square text-blue-600"></i>
+          <span>商品データの編集</span>
+        </h3>
+        <button onclick="closeEditProductModal()" class="text-xl font-bold text-slate-400 hover:text-slate-600 px-2 py-1">✕</button>
+      </div>
+
+      <form onsubmit="handleSaveEditedProduct(event)" class="space-y-3.5">
+        <input type="hidden" id="edit-prod-id">
+
+        <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
+          <!-- アイコン/絵文字 -->
+          <div class="sm:col-span-3">
+            <label class="block text-xs font-bold text-slate-700 mb-1">アイコン</label>
+            <input type="text" id="edit-prod-emoji" maxlength="2" required class="w-full text-center text-2xl font-bold bg-white border border-slate-300 rounded-lg py-1.5 focus:outline-none focus:border-blue-500">
+          </div>
+
+          <!-- 商品名 -->
+          <div class="sm:col-span-9">
+            <label class="block text-xs font-bold text-slate-700 mb-1">商品名</label>
+            <input type="text" id="edit-prod-name" required class="w-full font-bold bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+          </div>
+
+          <!-- 単価 -->
+          <div class="sm:col-span-4">
+            <label class="block text-xs font-bold text-slate-700 mb-1">単価（円）</label>
+            <input type="number" id="edit-prod-price" min="1" max="999999" step="1" required class="w-full font-bold bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+          </div>
+
+          <!-- 在庫数 -->
+          <div class="sm:col-span-4">
+            <label class="block text-xs font-bold text-slate-700 mb-1">現在在庫数</label>
+            <input type="number" id="edit-prod-stock" min="0" max="9999" required class="w-full font-bold bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+          </div>
+
+          <!-- カテゴリ -->
+          <div class="sm:col-span-4">
+            <label class="block text-xs font-bold text-slate-700 mb-1">カテゴリ</label>
+            <select id="edit-prod-category" class="w-full font-bold bg-white border border-slate-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:border-blue-500">
+              <option value="フード">フード</option>
+              <option value="ドリンク">ドリンク</option>
+              <option value="スイーツ">スイーツ</option>
+              <option value="グッズ">グッズ</option>
+              <option value="ゲーム・体験">ゲーム・体験</option>
+              <option value="その他">その他</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- バーコード番号とプレビュー -->
+        <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="block text-xs font-bold text-slate-700">🏷️ バーコード番号</label>
+            <button type="button" onclick="regenerateEditBarcode()" class="pos-btn bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs px-2.5 py-1 rounded">
+              <i class="fa-solid fa-arrows-rotate"></i><span>新番号採番</span>
+            </button>
+          </div>
+          <input type="text" id="edit-prod-barcode" oninput="updateEditBarcodePreview()" class="w-full font-mono text-sm font-bold text-slate-800 bg-white border border-slate-300 rounded-lg px-3 py-1.5">
+          <div class="flex justify-center bg-white p-1 rounded border border-dashed border-slate-300">
+            <svg id="edit-barcode-preview" class="max-w-full h-9"></svg>
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2 border-t border-slate-200">
+          <button type="button" onclick="closeEditProductModal()" class="pos-btn py-2 px-4 bg-slate-200 hover:bg-slate-300 text-slate-700 text-sm rounded-lg">
+            キャンセル
+          </button>
+          <button type="submit" class="pos-btn py-2 px-5 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg">
+            <i class="fa-solid fa-check"></i>
+            <span>変更を保存する</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 8. その他・手入力商品追加モーダル -->
+  <div id="custom-product-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-3 sm:p-4">
+    <div class="pos-card max-w-md w-full p-5 sm:p-6 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b border-slate-200 pb-2.5">
+        <h3 class="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
+          <i class="fa-solid fa-plus-circle text-amber-500"></i>
+          <span>手入力・その他商品のカゴ追加</span>
+        </h3>
+        <button type="button" onclick="closeCustomProductModal()" class="text-xl font-bold text-slate-400 hover:text-slate-600 px-2 py-1">✕</button>
+      </div>
+
+      <form onsubmit="handleSaveCustomProduct(event)" class="space-y-3.5">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">商品名・摘要</label>
+          <input type="text" id="custom-prod-name" placeholder="例: その他商品, 寄付, 特別セット" required class="w-full font-bold bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">単価（円）</label>
+            <input type="number" id="custom-prod-price" min="1" max="999999" placeholder="例: 300" required class="w-full font-bold bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">数量</label>
+            <input type="number" id="custom-prod-count" min="1" max="99" value="1" required class="w-full font-bold bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">カテゴリ</label>
+            <select id="custom-prod-category" class="w-full font-bold bg-white border border-slate-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:border-amber-500">
+              <option value="その他" selected>その他</option>
+              <option value="フード">フード</option>
+              <option value="ドリンク">ドリンク</option>
+              <option value="スイーツ">スイーツ</option>
+              <option value="グッズ">グッズ</option>
+              <option value="ゲーム・体験">ゲーム・体験</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">アイコン</label>
+            <input type="text" id="custom-prod-emoji" value="🏷️" maxlength="2" class="w-full text-center font-bold bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-lg focus:outline-none focus:border-amber-500">
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2 border-t border-slate-200">
+          <button type="button" onclick="closeCustomProductModal()" class="pos-btn py-2 px-4 bg-slate-200 hover:bg-slate-300 text-slate-700 text-sm rounded-lg">
+            キャンセル
+          </button>
+          <button type="submit" class="pos-btn py-2 px-5 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-lg shadow-sm">
+            <i class="fa-solid fa-cart-plus"></i>
+            <span>カゴに追加</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 9. 割引・値引き設定モーダル -->
+  <div id="discount-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-3 sm:p-4">
+    <div class="pos-card max-w-md w-full p-5 sm:p-6 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b border-slate-200 pb-2.5">
+        <h3 class="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
+          <i class="fa-solid fa-tag text-amber-500"></i>
+          <span>値引き / 割引の設定</span>
+        </h3>
+        <button type="button" onclick="closeDiscountModal()" class="text-xl font-bold text-slate-400 hover:text-slate-600 px-2 py-1">✕</button>
+      </div>
+
+      <!-- 現在の割引状態 -->
+      <div id="discount-current-status" class="bg-amber-50 border border-amber-200 p-2.5 rounded-lg text-xs font-bold text-amber-900 flex items-center justify-between">
+        <span>現在: <span id="discount-current-label">割引なし</span></span>
+        <button type="button" onclick="clearDiscount()" class="text-rose-600 hover:underline">割引を解除</button>
+      </div>
+
+      <!-- クイック割引ボタン群（定率） -->
+      <div class="space-y-1.5">
+        <label class="block text-xs font-bold text-slate-700">パーセント割引 (% OFF)</label>
+        <div class="grid grid-cols-4 gap-2">
+          <button type="button" onclick="applyQuickDiscount('percent', 5, '5% OFF')" class="pos-btn py-2 bg-slate-100 hover:bg-amber-100 text-slate-800 text-xs font-bold border border-slate-300 rounded-lg">5% OFF</button>
+          <button type="button" onclick="applyQuickDiscount('percent', 10, '10% OFF')" class="pos-btn py-2 bg-slate-100 hover:bg-amber-100 text-slate-800 text-xs font-bold border border-slate-300 rounded-lg">10% OFF</button>
+          <button type="button" onclick="applyQuickDiscount('percent', 20, '20% OFF')" class="pos-btn py-2 bg-slate-100 hover:bg-amber-100 text-slate-800 text-xs font-bold border border-slate-300 rounded-lg">20% OFF</button>
+          <button type="button" onclick="applyQuickDiscount('percent', 50, '半額 (50% OFF)')" class="pos-btn py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold border border-rose-300 rounded-lg">半額</button>
+        </div>
+      </div>
+
+      <!-- クイック値引きボタン群（定額） -->
+      <div class="space-y-1.5">
+        <label class="block text-xs font-bold text-slate-700">定額値引き (円引)</label>
+        <div class="grid grid-cols-4 gap-2">
+          <button type="button" onclick="applyQuickDiscount('amount', 50, '50円引き')" class="pos-btn py-2 bg-slate-100 hover:bg-amber-100 text-slate-800 text-xs font-bold border border-slate-300 rounded-lg">-50円</button>
+          <button type="button" onclick="applyQuickDiscount('amount', 100, '100円引き')" class="pos-btn py-2 bg-slate-100 hover:bg-amber-100 text-slate-800 text-xs font-bold border border-slate-300 rounded-lg">-100円</button>
+          <button type="button" onclick="applyQuickDiscount('amount', 200, '200円引き')" class="pos-btn py-2 bg-slate-100 hover:bg-amber-100 text-slate-800 text-xs font-bold border border-slate-300 rounded-lg">-200円</button>
+          <button type="button" onclick="applyQuickDiscount('amount', 500, '500円引き')" class="pos-btn py-2 bg-slate-100 hover:bg-amber-100 text-slate-800 text-xs font-bold border border-slate-300 rounded-lg">-500円</button>
+        </div>
+      </div>
+
+      <!-- 任意指定 -->
+      <div class="space-y-2 pt-2 border-t border-slate-200">
+        <label class="block text-xs font-bold text-slate-700">任意指定</label>
+        <div class="grid grid-cols-2 gap-2">
+          <div class="flex gap-1 items-center">
+            <input type="number" id="custom-discount-percent" min="1" max="99" placeholder="例: 15" class="w-full font-bold bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs">
+            <button type="button" onclick="applyCustomDiscountPercent()" class="pos-btn bg-slate-800 hover:bg-slate-700 text-white text-xs px-2.5 py-1.5 rounded-lg whitespace-nowrap">%引</button>
+          </div>
+          <div class="flex gap-1 items-center">
+            <input type="number" id="custom-discount-amount" min="1" max="99999" placeholder="例: 30" class="w-full font-bold bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs">
+            <button type="button" onclick="applyCustomDiscountAmount()" class="pos-btn bg-slate-800 hover:bg-slate-700 text-white text-xs px-2.5 py-1.5 rounded-lg whitespace-nowrap">円引</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2 border-t border-slate-200">
+        <button type="button" onclick="closeDiscountModal()" class="pos-btn py-2 px-5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-sm rounded-lg">
+          閉じる
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 10. 売上データQRコード表示モーダル -->
+  <div id="sales-qr-display-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-3 sm:p-4">
+    <div class="pos-card max-w-md w-full p-5 sm:p-6 shadow-2xl space-y-4 text-center">
+      <div class="flex justify-between items-center border-b border-slate-200 pb-2.5 text-left">
+        <div>
+          <h3 class="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
+            <i class="fa-solid fa-qrcode text-blue-600"></i>
+            <span>売上データ QRコード</span>
+          </h3>
+          <p class="text-xs text-slate-500 font-bold" id="sales-qr-terminal-label">端末: レジ1</p>
+        </div>
+        <button type="button" onclick="closeSalesQrModal()" class="text-xl font-bold text-slate-400 hover:text-slate-600 px-2 py-1">✕</button>
+      </div>
+
+      <!-- QRコード描画エリア -->
+      <div class="bg-white p-4 rounded-2xl border-2 border-indigo-200 shadow-inner flex flex-col items-center justify-center min-h-[260px]">
+        <div id="sales-qrcode-container" class="flex justify-center items-center"></div>
+        <p class="text-xs font-bold text-slate-600 mt-3">
+          集計側端末の「カメラで売上QR読込合算」でこのQRを撮影してください
+        </p>
+      </div>
+
+      <!-- サマリー内訳 -->
+      <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs text-left grid grid-cols-3 gap-2 text-center">
+        <div>
+          <span class="text-slate-400 font-bold block text-[10px]">総売上</span>
+          <span id="sales-qr-revenue" class="font-black text-indigo-600 text-sm">¥0</span>
+        </div>
+        <div>
+          <span class="text-slate-400 font-bold block text-[10px]">客数</span>
+          <span id="sales-qr-customers" class="font-black text-slate-800 text-sm">0人</span>
+        </div>
+        <div>
+          <span class="text-slate-400 font-bold block text-[10px]">販売点数</span>
+          <span id="sales-qr-items" class="font-black text-slate-800 text-sm">0点</span>
+        </div>
+      </div>
+
+      <button type="button" onclick="closeSalesQrModal()" class="pos-btn w-full py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-bold rounded-lg">
+        閉じる
+      </button>
+    </div>
+  </div>
+  <div id="qr-reader-file-temp" class="hidden"></div>
+
+  <!-- アプリロジック -->
+  <script src="app.js?v=13"></script>
+</body>
+</html>
